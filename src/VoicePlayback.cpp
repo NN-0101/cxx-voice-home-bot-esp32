@@ -140,160 +140,166 @@ bool VoicePlayback::initSPIFFS()
 
 bool VoicePlayback::playWAV(const char* fileName)
 {
-    // 检查初始化状态
-    if (!isInitialized) {
+    if(!isInitialized) {
         Serial.println("❌ 音频系统未初始化");
         return false;
     }
 
-    // 打开文件
+    if(isPlaying) {
+        Serial.println("⚠️ 正在播放中");
+        return false;
+    }
+
+    Serial.printf("🔊 打开文件: %s\n", fileName);
+
     File audioFile = SPIFFS.open(fileName, "r");
-    if (!audioFile) {
+    if(!audioFile) {
         Serial.printf("❌ 无法打开文件: %s\n", fileName);
         return false;
     }
 
-    Serial.printf("📂 打开文件: %s (%d 字节)\n", fileName, audioFile.size());
+    Serial.printf("✅ 文件打开成功，大小: %d bytes\n", audioFile.size());
 
-    // 读取并验证 WAV 头
+    // 读取标准WAV头
     WAVHeader header;
-    if (audioFile.read((uint8_t*)&header, sizeof(header)) != sizeof(header)) {
-        Serial.println("❌ 读取 WAV 头失败");
+    size_t bytesRead = audioFile.read((uint8_t*)&header, sizeof(header));
+    Serial.printf("读取WAV头: %d / %d bytes\n", bytesRead, sizeof(header));
+
+    if(bytesRead != sizeof(header)) {
+        Serial.println("❌ 读取WAV头失败");
         audioFile.close();
         return false;
     }
 
-    // 验证 RIFF 标识
-    if (memcmp(header.chunkID, "RIFF", 4) != 0) {
-        Serial.println("❌ 无效的 RIFF 标识");
+    // 验证WAV格式
+    if(strncmp(header.chunkID, "RIFF", 4) != 0) {
+        Serial.println("❌ 无效的RIFF标识");
         audioFile.close();
         return false;
     }
 
-    // 验证 WAVE 标识
-    if (memcmp(header.format, "WAVE", 4) != 0) {
-        Serial.println("❌ 无效的 WAVE 标识");
+    if(strncmp(header.format, "WAVE", 4) != 0) {
+        Serial.println("❌ 无效的WAVE标识");
         audioFile.close();
         return false;
     }
 
-    // 验证 fmt 标识
-    if (memcmp(header.subchunk1ID, "fmt ", 4) != 0) {
-        Serial.println("❌ 无效的 fmt 标识");
+    if(strncmp(header.subchunk1ID, "fmt ", 4) != 0) {
+        Serial.println("❌ 无效的fmt标识");
         audioFile.close();
         return false;
     }
 
-    // 验证音频格式（必须是 PCM）
-    if (header.audioFormat != 1) {
-        Serial.printf("❌ 不支持的音频格式: %d (仅支持 PCM)\n", header.audioFormat);
+    if(header.audioFormat != 1) {
+        Serial.printf("❌ 不支持的音频格式: %d\n", header.audioFormat);
         audioFile.close();
         return false;
     }
 
-    // 打印音频信息
-    Serial.println("✅ WAV 格式验证通过");
-    Serial.printf("   📊 采样率: %d Hz\n", header.sampleRate);
-    Serial.printf("   🔊 声道数: %d\n", header.numChannels);
-    Serial.printf("   📀 位深度: %d bit\n", header.bitsPerSample);
-    Serial.printf("   💾 数据大小: %d 字节 (%.2f 秒)\n",
-                  header.subchunk2Size,
-                  (float)header.subchunk2Size / header.byteRate);
+    Serial.printf("✅ WAV格式验证通过\n");
+    Serial.printf("   采样率: %d Hz\n", header.sampleRate);
+    Serial.printf("   声道数: %d\n", header.numChannels);
+    Serial.printf("   位深度: %d bit\n", header.bitsPerSample);
 
-    // 查找 data 块（某些 WAV 文件可能有额外的块）
+    // 查找data块
     uint32_t dataOffset = 0;
     uint32_t dataSize = 0;
-    uint32_t currentPos = sizeof(header);  // 已读取完整头，当前位置在头之后
 
-    // 如果 subchunk2ID 不是 "data"，说明有额外块
-    if (memcmp(header.subchunk2ID, "data", 4) != 0) {
-        Serial.println("⚠️ 检测到额外块，正在查找 data 块...");
+    // 从fmt块之后开始查找
+    uint32_t currentPos = 12 + 8 + header.subchunk1Size;  // RIFF(12) + fmt(8) + fmt数据大小
 
-        // 从当前位置开始查找
-        while (currentPos < audioFile.size()) {
-            char chunkID[5] = {0};
-            uint32_t chunkSize;
+    Serial.printf("从位置 %d 开始查找data块\n", currentPos);
 
-            if (audioFile.read((uint8_t*)chunkID, 4) != 4) break;
-            if (audioFile.read((uint8_t*)&chunkSize, 4) != 4) break;
+    while(currentPos < audioFile.size()) {
+        audioFile.seek(currentPos);
 
-            if (memcmp(chunkID, "data", 4) == 0) {
-                dataOffset = audioFile.position();
-                dataSize = chunkSize;
-                Serial.printf("✅ 找到 data 块，偏移: %d, 大小: %d\n", dataOffset, dataSize);
-                break;
-            }
+        char chunkID[5] = {0};
+        uint32_t chunkSize;
 
-            // 跳过当前块
-            audioFile.seek(currentPos + 8 + chunkSize);
-            currentPos = audioFile.position();
+        if(audioFile.read((uint8_t*)chunkID, 4) != 4) {
+            Serial.println("读取块ID失败");
+            break;
         }
-    } else {
-        // 标准格式，直接使用头中的信息
-        dataOffset = audioFile.position();
-        dataSize = header.subchunk2Size;
-        Serial.printf("✅ data 块偏移: %d, 大小: %d\n", dataOffset, dataSize);
+
+        if(audioFile.read((uint8_t*)&chunkSize, 4) != 4) {
+            Serial.println("读取块大小失败");
+            break;
+        }
+
+        Serial.printf("找到块: %c%c%c%c, 大小: %d\n", chunkID[0], chunkID[1], chunkID[2], chunkID[3], chunkSize);
+
+        if(strncmp(chunkID, "data", 4) == 0) {
+            dataOffset = currentPos + 8;
+            dataSize = chunkSize;
+            Serial.printf("✅ 找到data块！偏移: %d, 大小: %d\n", dataOffset, dataSize);
+            break;
+        }
+
+        // 跳过当前块
+        currentPos += 8 + chunkSize;
+
+        // 防止无限循环
+        if(currentPos >= audioFile.size()) {
+            break;
+        }
     }
 
-    if (dataSize == 0) {
-        Serial.println("❌ 未找到 data 块");
+    if(dataSize == 0) {
+        Serial.println("❌ 未找到data块");
         audioFile.close();
         return false;
     }
 
-    // 配置 I2S 时钟（使用 WAV 文件的采样率）
-    i2s_set_clk(I2S_NUM_0, header.sampleRate,
-                (header.bitsPerSample == 16) ? I2S_BITS_PER_SAMPLE_16BIT : I2S_BITS_PER_SAMPLE_8BIT,
-                (header.numChannels == 2) ? I2S_CHANNEL_STEREO : I2S_CHANNEL_MONO);
+    // 跳转到数据开始位置
+    audioFile.seek(dataOffset);
 
-    // 分配缓冲区
+    // 配置I2S - 使用WAV文件的采样率
+    i2s_set_clk(I2S_NUM_0, header.sampleRate,
+                header.bitsPerSample == 16 ? I2S_BITS_PER_SAMPLE_16BIT : I2S_BITS_PER_SAMPLE_8BIT,
+                header.numChannels == 2 ? I2S_CHANNEL_STEREO : I2S_CHANNEL_MONO);
+
+    isPlaying = true;
+
+    // 播放音频数据
     uint8_t* buffer = (uint8_t*)malloc(bufferSize);
-    if (!buffer) {
+    if(!buffer) {
         Serial.println("❌ 内存分配失败");
         audioFile.close();
+        isPlaying = false;
         return false;
     }
 
-    // 播放音频
-    isPlaying = true;
     size_t totalBytes = 0;
     size_t bytesWritten;
     uint32_t remaining = dataSize;
 
     Serial.println("🎵 开始播放...");
-    unsigned long startTime = millis();
 
-    while (remaining > 0) {
+    while(remaining > 0 && isPlaying) {
         size_t toRead = (remaining < bufferSize) ? remaining : bufferSize;
         size_t readBytes = audioFile.read(buffer, toRead);
-
-        if (readBytes > 0) {
+        if(readBytes > 0) {
             i2s_write(I2S_NUM_0, buffer, readBytes, &bytesWritten, portMAX_DELAY);
             totalBytes += bytesWritten;
             remaining -= readBytes;
 
-            // 每 0.5 秒显示一次进度
-            if (millis() - startTime > 500) {
-                int progress = (totalBytes * 100) / dataSize;
-                Serial.printf("   播放进度: %d%%\n", progress);
-                startTime = millis();
+            // 显示播放进度
+            if(totalBytes % (header.sampleRate * header.blockAlign) == 0) {
+                int seconds = totalBytes / header.byteRate;
+                Serial.printf("   播放进度: %d 秒\n", seconds);
             }
         } else {
             break;
         }
     }
 
-    // 清理
     free(buffer);
     audioFile.close();
 
-    // 确保 DMA 缓冲区清空
+    delay(100);
     i2s_zero_dma_buffer(I2S_NUM_0);
-    delay(50);
 
+    Serial.printf("✅ 播放完成，共 %d bytes (%.1f 秒)\n", totalBytes, (float)totalBytes / header.byteRate);
     isPlaying = false;
-    Serial.printf("✅ 播放完成，共 %d 字节 (%.2f 秒)\n",
-                  totalBytes, (float)totalBytes / header.byteRate);
-
     return true;
 }

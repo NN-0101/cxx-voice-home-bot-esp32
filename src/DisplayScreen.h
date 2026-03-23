@@ -9,7 +9,7 @@
 #define SCREEN_MOSI 22  // 板子上写的是DI
 #define SCREEN_SCLK 21  // 板子上写的是DO
 #define SCREEN_DC 15
-#define SCREEN_CS -1
+#define SCREEN_CS 5
 #define SCREEN_RES 2  // 复位引脚
 
 // 显示屏长宽
