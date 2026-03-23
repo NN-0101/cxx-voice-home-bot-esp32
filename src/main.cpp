@@ -1,8 +1,10 @@
 #include <Arduino.h>
 
 #include "DisplayScreen.h"
+#include "PTZControl.h"
 
 DisplayScreen displayScreen;
+PTZControl ptzControl;
 
 /**
  * 初始化函数，在程序开始时自动执行一次
@@ -20,6 +22,12 @@ void setup() {
         Serial.println("显示屏初始化失败！！！");
     }
     delay(1000);
+
+    // 初始化舵机
+    if (ptzControl.init())
+    {
+        ptzControl.searchMovement();
+    }
 
 }
 
