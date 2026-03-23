@@ -17,7 +17,7 @@ DisplayScreen::DisplayScreen()
 {
 }
 
-bool DisplayScreen::init()
+bool DisplayScreen::begin()
 {
     Serial.println("初始化显示屏，显示眼睛");
     // 复位显示屏

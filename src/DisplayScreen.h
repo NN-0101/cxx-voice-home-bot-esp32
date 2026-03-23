@@ -19,6 +19,7 @@
 
 
 /**
+ * 显示屏内容设置
  * 此处使用的显示屏是 GND0.96OLED显示屏 SSD1306 1315 128X64 SPI串口6Pin 3.3V 5V-SSD1353
  */
 class DisplayScreen
@@ -43,7 +44,7 @@ public:
     /**
      * 初始化
      */
-    bool init();
+    bool begin();
 
     /**
      *  显示眼睛

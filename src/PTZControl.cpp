@@ -13,7 +13,7 @@ PTZControl::PTZControl() : horizontalPin(SERVO_HORIZONTAL), verticalPin(SERVO_VE
 {
 }
 
-bool PTZControl::init(int hPin, int vPin)
+bool PTZControl::begin(int hPin, int vPin)
 {
     horizontalPin = hPin;
     verticalPin = vPin;

@@ -11,6 +11,7 @@
 
 
 /**
+ * 云台控制
  * 此处使用的是二维云台 金属二自由度双轴云台智能小车机器人FPV航模摄像头 舵机云台支架,
  * 这里使用的是PWM来控制
  * PWM 是 Pulse Width Modulation（脉冲宽度调制）的缩写，是一种通过快速开关信号来控制输出功率的技术。
@@ -79,7 +80,7 @@ public:
      * @param vPin 垂直引脚号
      * @return 是否成功
      */
-    bool init(int hPin = SERVO_HORIZONTAL, int vPin = SERVO_VERTICAL);
+    bool begin(int hPin = SERVO_HORIZONTAL, int vPin = SERVO_VERTICAL);
 
     /**
      * 设置水平舵机角度（通常控制左右看） 角度值（0-180度） 将角度转换为脉冲宽度，输出 PWM
