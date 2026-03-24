@@ -1,0 +1,14 @@
+//
+// Created by 0101 on 2026/3/24.
+//
+
+#ifndef CXX_VOICE_HOME_BOT_ESP32_WEBSOCKETCLIENT_H
+#define CXX_VOICE_HOME_BOT_ESP32_WEBSOCKETCLIENT_H
+
+
+class WebSocketClient
+{
+};
+
+
+#endif //CXX_VOICE_HOME_BOT_ESP32_WEBSOCKETCLIENT_H
